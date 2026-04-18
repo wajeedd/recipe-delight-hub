@@ -10,7 +10,7 @@ export const Navbar = () => {
   return (
     <header className="sticky top-0 z-40 backdrop-blur-md bg-background/80 border-b border-border">
       <div className="container flex h-16 items-center justify-between gap-3">
-        <Link to="/" className="flex items-center gap-2 group">
+        <Link to={user ? "/welcome" : "/auth"} className="flex items-center gap-2 group">
           <div className="h-9 w-9 rounded-xl bg-gradient-primary grid place-items-center shadow-soft group-hover:animate-wiggle">
             <ChefHat className="h-5 w-5 text-primary-foreground" />
           </div>
@@ -23,6 +23,9 @@ export const Navbar = () => {
           {user ? (
             <>
               <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
+                <Link to="/browse">Browse</Link>
+              </Button>
+              <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
                 <Link to="/favorites"><Heart className="h-4 w-4" /> Favorites</Link>
               </Button>
               <Button variant="hero" size="sm" asChild>
@@ -31,7 +34,7 @@ export const Navbar = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={async () => { await signOut(); nav("/"); }}
+                onClick={async () => { await signOut(); nav("/auth"); }}
                 aria-label="Sign out"
               >
                 <LogOut className="h-4 w-4" />

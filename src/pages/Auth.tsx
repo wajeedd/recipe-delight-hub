@@ -18,7 +18,7 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => { document.title = "Sign in — YumBook"; }, []);
-  useEffect(() => { if (user) nav("/"); }, [user, nav]);
+  useEffect(() => { if (user) nav("/welcome"); }, [user, nav]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,16 +28,16 @@ const Auth = () => {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/`,
+          emailRedirectTo: `${window.location.origin}/welcome`,
           data: { display_name: name || email.split("@")[0] },
         },
       });
       if (error) toast.error(error.message);
-      else { toast.success("Welcome to YumBook!"); nav("/"); }
+      else { toast.success("Welcome to YumBook!"); nav("/welcome"); }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) toast.error(error.message);
-      else nav("/");
+      else nav("/welcome");
     }
     setLoading(false);
   };
