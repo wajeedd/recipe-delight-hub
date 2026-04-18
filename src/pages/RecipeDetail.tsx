@@ -8,6 +8,7 @@ import { CATEGORY_STYLES, getYouTubeEmbed } from "@/lib/recipes";
 import { cn } from "@/lib/utils";
 import { Clock, Heart, Pencil, Play, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
+import { STARTER_RECIPE_BY_ID } from "@/lib/starterRecipes";
 
 type Recipe = {
   id: string;
@@ -35,46 +36,109 @@ const RecipeDetail = () => {
 
   useEffect(() => {
     if (!id) return;
-    supabase.from("recipes").select("*").eq("id", id).maybeSingle().then(({ data, error }) => {
-      if (error) toast.error(error.message);
-      setRecipe(data as Recipe | null);
-      if (data) document.title = `${data.title} — YumBook`;
+
+    const starterRecipe = STARTER_RECIPE_BY_ID[id];
+    if (starterRecipe) {
+      setRecipe(starterRecipe);
+      document.title = `${starterRecipe.title} - YumBook`;
       setLoading(false);
-    });
+      return;
+    }
+
+    supabase
+      .from("recipes")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) toast.error(error.message);
+        setRecipe(data as Recipe | null);
+        if (data) document.title = `${data.title} - YumBook`;
+        setLoading(false);
+      });
   }, [id]);
 
   useEffect(() => {
     if (!user || !id) return;
-    supabase.from("favorites").select("id").eq("user_id", user.id).eq("recipe_id", id).maybeSingle()
+    if (id.startsWith("starter-")) {
+      setIsFav(false);
+      return;
+    }
+
+    supabase
+      .from("favorites")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("recipe_id", id)
+      .maybeSingle()
       .then(({ data }) => setIsFav(!!data));
   }, [user, id]);
 
   const toggleFav = async () => {
-    if (!user) { toast("Sign in to save favorites"); return; }
+    if (!user) {
+      toast("Sign in to save favorites");
+      return;
+    }
     if (!recipe) return;
+    if (recipe.id.startsWith("starter-")) {
+      toast("Starter recipes are read-only and cannot be favorited");
+      return;
+    }
+
     if (isFav) {
       setIsFav(false);
       await supabase.from("favorites").delete().eq("user_id", user.id).eq("recipe_id", recipe.id);
     } else {
       setIsFav(true);
       const { error } = await supabase.from("favorites").insert({ user_id: user.id, recipe_id: recipe.id });
-      if (error) { setIsFav(false); toast.error(error.message); }
+      if (error) {
+        setIsFav(false);
+        toast.error(error.message);
+      }
     }
   };
 
   const remove = async () => {
     if (!recipe) return;
+    if (recipe.id.startsWith("starter-")) {
+      toast("Starter recipes cannot be deleted");
+      return;
+    }
     if (!confirm("Delete this recipe?")) return;
+
     const { error } = await supabase.from("recipes").delete().eq("id", recipe.id);
     if (error) toast.error(error.message);
-    else { toast.success("Recipe deleted"); nav("/"); }
+    else {
+      toast.success("Recipe deleted");
+      nav("/");
+    }
   };
 
-  if (loading) return <div className="min-h-screen"><Navbar /><div className="container py-20 text-center text-muted-foreground">Loading...</div></div>;
-  if (!recipe) return <div className="min-h-screen"><Navbar /><div className="container py-20 text-center"><h1 className="font-display text-2xl">Recipe not found</h1><Button asChild className="mt-4"><Link to="/">Go home</Link></Button></div></div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen">
+        <Navbar />
+        <div className="container py-20 text-center text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!recipe) {
+    return (
+      <div className="min-h-screen">
+        <Navbar />
+        <div className="container py-20 text-center">
+          <h1 className="font-display text-2xl">Recipe not found</h1>
+          <Button asChild className="mt-4">
+            <Link to="/">Go home</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const embed = getYouTubeEmbed(recipe.video_url);
-  const isOwner = user?.id === recipe.user_id;
+  const isOwner = user?.id === recipe.user_id && !recipe.id.startsWith("starter-");
 
   return (
     <div className="min-h-screen">
@@ -83,7 +147,12 @@ const RecipeDetail = () => {
         <div className="space-y-4">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <span className={cn("inline-block px-3 py-1 rounded-full text-xs font-bold mb-3", CATEGORY_STYLES[recipe.category] ?? "bg-muted")}>
+              <span
+                className={cn(
+                  "inline-block px-3 py-1 rounded-full text-xs font-bold mb-3",
+                  CATEGORY_STYLES[recipe.category] ?? "bg-muted",
+                )}
+              >
                 {recipe.category}
               </span>
               <h1 className="font-display text-3xl md:text-5xl font-bold leading-tight">{recipe.title}</h1>
@@ -95,21 +164,38 @@ const RecipeDetail = () => {
               </Button>
               {isOwner && (
                 <>
-                  <Button variant="outline" size="icon" asChild><Link to={`/edit/${recipe.id}`}><Pencil className="h-4 w-4" /></Link></Button>
-                  <Button variant="destructive" size="icon" onClick={remove}><Trash2 className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="icon" asChild>
+                    <Link to={`/edit/${recipe.id}`}>
+                      <Pencil className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button variant="destructive" size="icon" onClick={remove}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </>
               )}
             </div>
           </div>
 
           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-            {recipe.prep_time != null && <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4" /> Prep {recipe.prep_time}m</span>}
-            {recipe.cook_time != null && <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4" /> Cook {recipe.cook_time}m</span>}
-            {recipe.servings != null && <span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4" /> Serves {recipe.servings}</span>}
+            {recipe.prep_time != null && (
+              <span className="inline-flex items-center gap-1.5">
+                <Clock className="h-4 w-4" /> Prep {recipe.prep_time}m
+              </span>
+            )}
+            {recipe.cook_time != null && (
+              <span className="inline-flex items-center gap-1.5">
+                <Clock className="h-4 w-4" /> Cook {recipe.cook_time}m
+              </span>
+            )}
+            {recipe.servings != null && (
+              <span className="inline-flex items-center gap-1.5">
+                <Users className="h-4 w-4" /> Serves {recipe.servings}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Media */}
         <div className="rounded-3xl overflow-hidden shadow-pop bg-card aspect-video relative">
           {playing && embed ? (
             <iframe
@@ -141,7 +227,7 @@ const RecipeDetail = () => {
               </span>
             </button>
           ) : (
-            <div className="w-full h-full bg-gradient-hero grid place-items-center text-7xl">🍳</div>
+            <div className="w-full h-full bg-gradient-hero grid place-items-center text-6xl">Dish</div>
           )}
         </div>
 
@@ -153,7 +239,7 @@ const RecipeDetail = () => {
 
         <div className="grid md:grid-cols-2 gap-8">
           <section className="bg-card rounded-2xl p-6 shadow-soft">
-            <h2 className="font-display text-2xl font-bold mb-4">🥕 Ingredients</h2>
+            <h2 className="font-display text-2xl font-bold mb-4">Ingredients</h2>
             <ul className="space-y-2">
               {recipe.ingredients.map((ing, i) => (
                 <li key={i} className="flex items-start gap-2">
@@ -164,11 +250,13 @@ const RecipeDetail = () => {
             </ul>
           </section>
           <section className="bg-card rounded-2xl p-6 shadow-soft">
-            <h2 className="font-display text-2xl font-bold mb-4">👩‍🍳 Steps</h2>
+            <h2 className="font-display text-2xl font-bold mb-4">Steps</h2>
             <ol className="space-y-4">
               {recipe.steps.map((s, i) => (
                 <li key={i} className="flex gap-3">
-                  <span className="shrink-0 h-7 w-7 rounded-full bg-gradient-primary text-primary-foreground font-bold grid place-items-center text-sm">{i + 1}</span>
+                  <span className="shrink-0 h-7 w-7 rounded-full bg-gradient-primary text-primary-foreground font-bold grid place-items-center text-sm">
+                    {i + 1}
+                  </span>
                   <span>{s}</span>
                 </li>
               ))}

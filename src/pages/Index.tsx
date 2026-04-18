@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import hero from "@/assets/hero.jpg";
+import { STARTER_RECIPES, toRecipeCard } from "@/lib/starterRecipes";
 
 const Index = () => {
   const { user } = useAuth();
@@ -31,7 +32,12 @@ const Index = () => {
         .select("id, title, description, category, image_url")
         .order("created_at", { ascending: false });
       if (error) toast.error(error.message);
-      setRecipes((data ?? []) as RecipeCardData[]);
+      const dbRecipes = (data ?? []) as RecipeCardData[];
+      const dbIds = new Set(dbRecipes.map((recipe) => recipe.id));
+      const starterCards = STARTER_RECIPES
+        .filter((recipe) => !dbIds.has(recipe.id))
+        .map(toRecipeCard);
+      setRecipes([...dbRecipes, ...starterCards]);
       setLoading(false);
     };
     load();
@@ -54,6 +60,10 @@ const Index = () => {
 
   const toggleFav = async (id: string) => {
     if (!user) { toast("Sign in to save favorites"); return; }
+    if (id.startsWith("starter-")) {
+      toast("Starter recipes are read-only and cannot be favorited");
+      return;
+    }
     if (favs.has(id)) {
       const next = new Set(favs); next.delete(id); setFavs(next);
       await supabase.from("favorites").delete().eq("user_id", user.id).eq("recipe_id", id);
